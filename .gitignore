@@ -1,0 +1,30 @@
+# Local credentials and environment
+.env
+.env.*
+!.env.example
+**/local.properties
+**/*.jks
+**/*.keystore
+
+# Dependencies and generated outputs
+**/node_modules/
+**/dist/
+**/coverage/
+**/.vite/
+**/.gradle/
+**/build/
+
+# Local app profiles and homologation artifacts/data
+FLUXOS_HOMOLOGACAO_PROFILE/
+FLUXOS_HOMOLOGACAO_*/
+FLUXOS_HOMOLOGACAO_*.zip
+FLUXOS_HOMOLOGACAO_COMPLETA.zip
+homologacao/
+app/homologacao/
+
+# IDE and OS state
+.idea/
+**/.idea/
+.vscode/
+Thumbs.db
+Desktop.ini
