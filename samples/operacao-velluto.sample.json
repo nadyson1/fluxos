@@ -1,0 +1,129 @@
+{
+  "format": "fluxos-project",
+  "schemaVersion": 1,
+  "exportedAt": "2026-11-22T00:00:00.000Z",
+  "project": {
+    "id": "sample-project-velluto",
+    "name": "Operação VELLUTO (exemplo)",
+    "rootDiagramId": "sample-root",
+    "createdAt": "2026-11-22T00:00:00.000Z",
+    "updatedAt": "2026-11-22T00:00:00.000Z"
+  },
+  "diagrams": [
+    {
+      "id": "sample-root",
+      "projectId": "sample-project-velluto",
+      "name": "Operação VELLUTO",
+      "parentDiagramId": null,
+      "ownerNodeId": null,
+      "nodes": [
+        {"id": "r1", "kind": "process", "label": "Marketing e captação", "position": {"x": 90, "y": 100}, "linkedDiagramId": "sample-marketing"},
+        {"id": "r2", "kind": "process", "label": "Execução de projetos", "position": {"x": 400, "y": 100}},
+        {"id": "r3", "kind": "process", "label": "Gestão financeira", "position": {"x": 400, "y": 290}}
+      ],
+      "edges": [
+        {"id": "re1", "source": "r1", "target": "r2", "style": "smoothstep"},
+        {"id": "re2", "source": "r1", "target": "r3", "style": "smoothstep"}
+      ],
+      "viewport": {"x": 0, "y": 0, "zoom": 1},
+      "createdAt": "2026-11-22T00:00:00.000Z",
+      "updatedAt": "2026-11-22T00:00:00.000Z"
+    },
+    {
+      "id": "sample-marketing",
+      "projectId": "sample-project-velluto",
+      "name": "Marketing e captação",
+      "parentDiagramId": "sample-root",
+      "ownerNodeId": "r1",
+      "nodes": [
+        {"id": "m1", "kind": "process", "label": "Funil de vendas", "position": {"x": 120, "y": 150}, "linkedDiagramId": "sample-funil"},
+        {"id": "m2", "kind": "note", "label": "Avaliar canais de aquisição", "position": {"x": 450, "y": 130}}
+      ],
+      "edges": [],
+      "createdAt": "2026-11-22T00:00:00.000Z",
+      "updatedAt": "2026-11-22T00:00:00.000Z"
+    },
+    {
+      "id": "sample-funil",
+      "projectId": "sample-project-velluto",
+      "name": "Funil de vendas",
+      "parentDiagramId": "sample-marketing",
+      "ownerNodeId": "m1",
+      "nodes": [
+        {"id": "f1", "kind": "process", "label": "Qualificação de leads", "position": {"x": 150, "y": 150}, "linkedDiagramId": "sample-leads"},
+        {"id": "f2", "kind": "process", "label": "Negociação", "position": {"x": 440, "y": 150}, "linkedDiagramId": "sample-negociacao"}
+      ],
+      "edges": [{"id": "fe1", "source": "f1", "target": "f2", "style": "smoothstep"}],
+      "createdAt": "2026-11-22T00:00:00.000Z",
+      "updatedAt": "2026-11-22T00:00:00.000Z"
+    },
+    {
+      "id": "sample-leads",
+      "projectId": "sample-project-velluto",
+      "name": "Qualificação de leads",
+      "parentDiagramId": "sample-funil",
+      "ownerNodeId": "f1",
+      "nodes": [
+        {"id": "l1", "kind": "startEnd", "label": "Início", "position": {"x": 0, "y": 200}},
+        {"id": "l2", "kind": "process", "label": "Lead recebido", "subtitle": "WhatsApp / Site / Formulário", "position": {"x": 230, "y": 200}},
+        {"id": "l3", "kind": "decision", "label": "Lead qualificado?", "position": {"x": 510, "y": 170}},
+        {"id": "l4", "kind": "process", "label": "Reunião de diagnóstico", "position": {"x": 850, "y": 60}, "linkedDiagramId": "sample-diagnostico"},
+        {"id": "l5", "kind": "process", "label": "Nutrir ou encerrar", "position": {"x": 850, "y": 360}}
+      ],
+      "edges": [
+        {"id": "le1", "source": "l1", "target": "l2", "style": "smoothstep"},
+        {"id": "le2", "source": "l2", "target": "l3", "style": "smoothstep"},
+        {"id": "le3", "source": "l3", "target": "l4", "label": "Sim", "style": "smoothstep"},
+        {"id": "le4", "source": "l3", "target": "l5", "label": "Não", "style": "smoothstep"}
+      ],
+      "createdAt": "2026-11-22T00:00:00.000Z",
+      "updatedAt": "2026-11-22T00:00:00.000Z"
+    },
+    {
+      "id": "sample-diagnostico",
+      "projectId": "sample-project-velluto",
+      "name": "Reunião de diagnóstico",
+      "parentDiagramId": "sample-leads",
+      "ownerNodeId": "l4",
+      "nodes": [
+        {"id": "d1", "kind": "startEnd", "label": "Início da reunião", "position": {"x": 50, "y": 150}},
+        {"id": "d2", "kind": "process", "label": "Entender necessidades", "position": {"x": 310, "y": 150}}
+      ],
+      "edges": [{"id": "de1", "source": "d1", "target": "d2"}],
+      "createdAt": "2026-11-22T00:00:00.000Z",
+      "updatedAt": "2026-11-22T00:00:00.000Z"
+    },
+    {
+      "id": "sample-negociacao",
+      "projectId": "sample-project-velluto",
+      "name": "Negociação",
+      "parentDiagramId": "sample-funil",
+      "ownerNodeId": "f2",
+      "nodes": [
+        {"id": "n1", "kind": "process", "label": "Tratamento de objeções", "position": {"x": 100, "y": 120}, "linkedDiagramId": "sample-objecoes"},
+        {"id": "n2", "kind": "process", "label": "Follow-up", "position": {"x": 420, "y": 120}}
+      ],
+      "edges": [{"id": "ne1", "source": "n1", "target": "n2"}],
+      "createdAt": "2026-11-22T00:00:00.000Z",
+      "updatedAt": "2026-11-22T00:00:00.000Z"
+    },
+    {
+      "id": "sample-objecoes",
+      "projectId": "sample-project-velluto",
+      "name": "Tratamento de objeções",
+      "parentDiagramId": "sample-negociacao",
+      "ownerNodeId": "n1",
+      "nodes": [
+        {"id": "o1", "kind": "decision", "label": "Qual é a objeção?", "position": {"x": 140, "y": 150}},
+        {"id": "o2", "kind": "process", "label": "Esclarecer valor", "position": {"x": 470, "y": 70}},
+        {"id": "o3", "kind": "process", "label": "Revisar prazo", "position": {"x": 470, "y": 260}}
+      ],
+      "edges": [
+        {"id": "oe1", "source": "o1", "target": "o2", "label": "Preço"},
+        {"id": "oe2", "source": "o1", "target": "o3", "label": "Prazo"}
+      ],
+      "createdAt": "2026-11-22T00:00:00.000Z",
+      "updatedAt": "2026-11-22T00:00:00.000Z"
+    }
+  ]
+}
