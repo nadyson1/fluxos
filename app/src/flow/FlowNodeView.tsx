@@ -3,6 +3,7 @@ import { ArrowUpRight, MoreHorizontal, Network } from 'lucide-react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import type { FlowNode } from '../domain';
 import { getFlowHandleDirection } from './handle-directions';
+import { shouldRenderHandles } from '../text-connections';
 
 export type FlowNodeData = FlowNode & {
   onEditLabel: (id: string, label: string) => void;
@@ -38,10 +39,12 @@ export function FlowNodeView({ id, data, selected }: NodeProps<CanvasNode>) {
 
   return (
     <div className={`flow-node flow-node--${data.kind}${selected ? ' is-selected' : ''}`}>
-      <Handle className="flow-handle" type={getFlowHandleDirection('left')} position={Position.Left} id="in-left" />
-      <Handle className="flow-handle" type={getFlowHandleDirection('right')} position={Position.Right} id="out-right" />
-      <Handle className="flow-handle" type={getFlowHandleDirection('top')} position={Position.Top} id="out-top" />
-      <Handle className="flow-handle" type={getFlowHandleDirection('bottom')} position={Position.Bottom} id="in-bottom" />
+      {shouldRenderHandles(data.kind) && <>
+        <Handle className="flow-handle" type={getFlowHandleDirection('left')} position={Position.Left} id="in-left" />
+        <Handle className="flow-handle" type={getFlowHandleDirection('right')} position={Position.Right} id="out-right" />
+        <Handle className="flow-handle" type={getFlowHandleDirection('top')} position={Position.Top} id="out-top" />
+        <Handle className="flow-handle" type={getFlowHandleDirection('bottom')} position={Position.Bottom} id="in-bottom" />
+      </>}
       <div className="flow-node-shape">
         {data.linkedDiagramId && (
           <button

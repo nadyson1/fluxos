@@ -1,4 +1,4 @@
-import { db } from './database';
+import { db, type TextConnectionRecoveryBackup } from './database';
 import {
   duplicateExport,
   removeNodePreservingSubprocess,
@@ -10,6 +10,7 @@ import {
   type Project,
   type SearchResult,
 } from './domain';
+import { removeTextConnectedEdges } from './text-connections';
 
 const newId = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
@@ -35,10 +36,36 @@ function orderedDiagrams(diagrams: Diagram[], rootId: string): Diagram[] {
 }
 
 export async function listProjects(): Promise<Project[]> {
+  await recoverTextConnections();
   return (await db.projects.toArray()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
+async function recoverTextConnections(projectId?: string): Promise<void> {
+  const diagrams = projectId
+    ? await db.diagrams.where('projectId').equals(projectId).toArray()
+    : await db.diagrams.toArray();
+  const affected = diagrams.map((originalDiagram) => ({ originalDiagram, ...removeTextConnectedEdges(originalDiagram) }))
+    .filter(({ removedEdges }) => removedEdges.length > 0);
+  if (!affected.length) return;
+
+  await db.transaction('rw', db.diagrams, db.textConnectionRecoveryBackups, async () => {
+    for (const item of affected) {
+      const current = await db.diagrams.get(item.originalDiagram.id);
+      if (!current) continue;
+      const recovery = removeTextConnectedEdges(current);
+      if (!recovery.removedEdges.length) continue;
+      const backup: TextConnectionRecoveryBackup = {
+        id: newId(), projectId: current.projectId, diagramId: current.id,
+        recoveredAt: now(), diagram: structuredClone(current), removedEdges: structuredClone(recovery.removedEdges),
+      };
+      await db.textConnectionRecoveryBackups.add(backup);
+      await db.diagrams.put({ ...recovery.diagram, updatedAt: now() });
+    }
+  });
+}
+
 export async function exportProject(projectId: string): Promise<ExportEnvelope> {
+  await recoverTextConnections(projectId);
   const project = await db.projects.get(projectId);
   if (!project) throw new Error('Projeto não encontrado.');
   const diagrams = orderedDiagrams(await db.diagrams.where('projectId').equals(projectId).toArray(), project.rootDiagramId);

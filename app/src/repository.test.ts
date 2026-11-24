@@ -31,6 +31,29 @@ describe('repositório local', () => {
     });
   });
 
+  it('faz backup antes de recuperar conexões inválidas envolvendo Texto livre', async () => {
+    const created = await repository.createProject('Afetado');
+    const diagram = created.diagrams[0];
+    diagram.nodes = [
+      { id: 'process', kind: 'process', label: 'Etapa', position: { x: 0, y: 0 } },
+      { id: 'text', kind: 'text', label: 'Título', position: { x: 50, y: 50 } },
+      { id: 'decision', kind: 'decision', label: 'Decisão', position: { x: 100, y: 0 } },
+    ];
+    diagram.edges = [
+      { id: 'valid', source: 'process', target: 'decision', sourceHandle: 'out-right', targetHandle: 'in-left', label: 'Sim' },
+      { id: 'invalid', source: 'process', target: 'text', sourceHandle: 'out-right', targetHandle: 'in-left', label: 'residual' },
+    ];
+    await db.diagrams.put(diagram);
+
+    const loaded = await repository.exportProject(created.project.id);
+    expect(loaded.diagrams[0].nodes.map((item) => item.id)).toEqual(['process', 'text', 'decision']);
+    expect(loaded.diagrams[0].edges).toEqual([diagram.edges[0]]);
+    const backups = await db.textConnectionRecoveryBackups.toArray();
+    expect(backups).toHaveLength(1);
+    expect(backups[0].diagram).toEqual(diagram);
+    expect(backups[0].removedEdges).toEqual([diagram.edges[1]]);
+  });
+
   it('rejeita um arquivo inválido sem gravar parte do projeto', async () => {
     const invalid = structuredClone(sample);
     invalid.diagrams[0].edges.push({ id: 'broken', source: 'node', target: 'missing' });
@@ -47,6 +70,16 @@ describe('repositório local', () => {
     expect(second.project.id).not.toBe(sample.project.id);
     expect(stored.diagrams[0].nodes[0].linkedDiagramId).toBe(stored.diagrams[1].id);
     expect(stored.diagrams[1].ownerNodeId).toBe(stored.diagrams[0].nodes[0].id);
+  });
+
+  it('preserva Texto livre e conexões normais no ciclo de importação e exportação', async () => {
+    const withText = structuredClone(sample);
+    withText.diagrams[0].nodes.push({ id: 'title', kind: 'text', label: 'Título', position: { x: 80, y: 120 }, bold: true });
+    withText.diagrams[0].edges.push({ id: 'flow-edge', source: 'node', target: 'node', sourceHandle: 'out-right', targetHandle: 'in-left', label: 'Sim' });
+    const imported = await repository.importProject(withText);
+    const exported = await repository.exportProject(imported.project.id);
+    expect(exported.diagrams[0].nodes.find((item) => item.id === 'title')).toMatchObject({ kind: 'text', label: 'Título', bold: true });
+    expect(exported.diagrams[0].edges).toContainEqual({ id: 'flow-edge', source: 'node', target: 'node', sourceHandle: 'out-right', targetHandle: 'in-left', label: 'Sim' });
   });
 
   it('cria um subprocesso e atualiza o vínculo do bloco na mesma operação', async () => {
