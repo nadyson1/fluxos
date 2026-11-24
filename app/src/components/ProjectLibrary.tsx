@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Copy, Folder, MoreHorizontal, Network, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronRight, Cloud, CloudOff, CloudUpload, Copy, Folder, LoaderCircle, Monitor, MoreHorizontal, Network, Pencil, Plus, Search, Tablet, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { normalizeSearchText, type Diagram, type Project } from '../domain';
 
 type ProjectRecord = { project: Project; diagrams: Diagram[] };
 type Props = {
   projects: ProjectRecord[];
+  syncStates: Record<string, { status: 'local' | 'pending' | 'syncing' | 'synced' | 'error' | 'conflict'; message: string }>;
   onCreate: () => void;
   onOpen: (projectId: string, diagramId: string) => void;
   onRename: (project: Project) => void;
@@ -16,7 +17,7 @@ type Props = {
   exampleImported: boolean;
 };
 
-export function ProjectLibrary({ projects, onCreate, onOpen, onRename, onDuplicate, onDelete, onSearch, onImportExample, exampleImported }: Props) {
+export function ProjectLibrary({ projects, syncStates, onCreate, onOpen, onRename, onDuplicate, onDelete, onSearch, onImportExample, exampleImported }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [query, setQuery] = useState('');
   const visibleProjects = useMemo(() => {
@@ -38,6 +39,9 @@ export function ProjectLibrary({ projects, onCreate, onOpen, onRename, onDuplica
       <label className="library-filter"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filtrar projetos por nome…" aria-label="Filtrar projetos" /></label>
       {visibleProjects.length ? <div className="project-list">
         {visibleProjects.map(({ project, diagrams }) => {
+          const sync = syncStates[project.id] ?? { status: 'local' as const, message: 'Salvo neste dispositivo.' };
+          const SyncIcon = sync.status === 'syncing' ? LoaderCircle : sync.status === 'pending' ? CloudUpload : sync.status === 'synced' ? Cloud : sync.status === 'conflict' || sync.status === 'error' ? AlertCircle : CloudOff;
+          const syncLabel = sync.status === 'local' ? 'Salvo neste dispositivo' : sync.status === 'pending' ? 'Aguardando sincronização' : sync.status === 'syncing' ? 'Sincronizando' : sync.status === 'synced' ? 'Sincronizado' : sync.status === 'conflict' ? 'Conflito: versões preservadas' : 'Erro de sincronização';
           const root = diagrams.find((diagram) => diagram.id === project.rootDiagramId);
           const children = new Map<string | null, Diagram[]>();
           diagrams.forEach((diagram) => { const group = children.get(diagram.parentDiagramId) ?? []; group.push(diagram); children.set(diagram.parentDiagramId, group); });
@@ -56,8 +60,8 @@ export function ProjectLibrary({ projects, onCreate, onOpen, onRename, onDuplica
           return <article className="project-entry" key={project.id}>
             <div className="project-entry-head">
               <button type="button" className="project-main-link" onClick={() => root && onOpen(project.id, root.id)}>
-                <span className="project-mark"><Folder size={20} aria-hidden="true" /></span>
-                <span className="project-title-block"><strong>{project.name}</strong><small>{diagrams.length} {diagrams.length === 1 ? 'fluxograma' : 'fluxogramas'} · alterado em {new Date(project.updatedAt).toLocaleDateString('pt-BR')}</small></span>
+                <span className="project-mark"><Folder size={20} aria-hidden="true" />{project.lastEditedOn && <span className="project-device-mark" title={`Última edição neste ${project.lastEditedOn === 'tablet' ? 'tablet' : 'computador'}`} aria-label={`Última edição neste ${project.lastEditedOn === 'tablet' ? 'tablet' : 'computador'}`}>{project.lastEditedOn === 'tablet' ? <Tablet size={12} aria-hidden="true" /> : <Monitor size={12} aria-hidden="true" />}</span>}</span>
+                <span className="project-title-block"><strong>{project.name}</strong><small>{diagrams.length} {diagrams.length === 1 ? 'fluxograma' : 'fluxogramas'} · alterado em {new Date(project.updatedAt).toLocaleDateString('pt-BR')}</small><span className={`project-sync-state project-sync-${sync.status}`} title={sync.message} aria-label={`${syncLabel}. ${sync.message}`}><SyncIcon size={13} aria-hidden="true" className={sync.status === 'syncing' ? 'spin' : undefined} />{syncLabel}</span></span>
               </button>
               <div className="project-entry-actions">
                 <button className="button button-open" type="button" onClick={() => root && onOpen(project.id, root.id)}>Abrir</button>

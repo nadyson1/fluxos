@@ -18,7 +18,7 @@ import {
   createProject, createSubprocess, deleteDiagramSubtree, deleteNodePreservingSubprocess, deleteProject,
   duplicateProject, exportProject, importProject, listProjects, renameDiagram, renameProject, saveDiagram,
 } from './repository';
-import { getCloudSyncState, requestCloudSync, restoreConflictVersion, setRemoteApplyHooks, startCloudSync, stopCloudSync, subscribeCloudSync, watchNetworkStatus } from './sync/engine';
+import { getCloudSyncState, refreshProjectSyncState, requestCloudSync, restoreConflictVersion, setRemoteApplyHooks, startCloudSync, stopCloudSync, subscribeCloudSync, watchNetworkStatus } from './sync/engine';
 import { observeFirebaseUser, signInWithGoogle, signOutOfGoogle } from './sync/firebase';
 import type { CloudSyncState } from './sync/engine';
 
@@ -91,6 +91,7 @@ export default function App() {
       return { project: envelope.project, diagrams: envelope.diagrams };
     }));
     setProjects(records);
+    await refreshProjectSyncState();
     requestCloudSync();
     return records;
   }, []);
@@ -445,6 +446,7 @@ export default function App() {
       {view === 'library' ? <div id="main-content" className="library-wrap">
         <ProjectLibrary
           projects={projects}
+          syncStates={cloudSync.projects}
           onCreate={showCreateProject}
           onOpen={(projectId, diagramId) => { void openProjectAt(projectId, diagramId); }}
           onRename={showRenameProject}

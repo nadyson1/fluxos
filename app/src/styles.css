@@ -266,10 +266,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .project-entry { overflow: visible; border: 1px solid #dce5dd; border-radius: 13px; background: #fff; box-shadow: 0 2px 6px rgb(36 58 40 / 3%); }
 .project-entry-head { display: flex; align-items: center; justify-content: space-between; min-height: 76px; gap: 12px; padding: 10px 13px 10px 15px; }
 .project-main-link { display: flex; flex: 1 1 auto; align-items: center; min-width: 0; gap: 12px; padding: 4px 0; border: 0; background: transparent; text-align: left; }
-.project-mark { display: grid; flex: 0 0 42px; place-items: center; width: 42px; height: 42px; border-radius: 11px; color: #40704d; background: #edf5ee; }
+.project-mark { position: relative; display: grid; flex: 0 0 42px; place-items: center; width: 42px; height: 42px; border-radius: 11px; color: #40704d; background: #edf5ee; }
+.project-device-mark { position: absolute; right: -4px; bottom: -4px; display: grid; place-items: center; width: 18px; height: 18px; border: 2px solid white; border-radius: 50%; color: #375d43; background: #e0eee2; }
 .project-title-block { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
 .project-title-block strong { overflow: hidden; font-size: 15.5px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
 .project-title-block small { color: #76837a; font-size: 12.5px; }
+.project-sync-state { display: inline-flex; align-items: center; width: fit-content; gap: 4px; color: #68786c; font-size: 11px; line-height: 1.2; }
+.project-sync-pending { color: #8a6113; }
+.project-sync-syncing { color: #376d98; }
+.project-sync-error, .project-sync-conflict { color: #a04438; }
+.project-sync-synced { color: #3f7656; }
 .project-entry-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }
 .button-open { min-height: 36px; padding: 6px 14px; border: 1px solid #d8e3d9; color: #326143; background: #f7fbf7; }
 .button-open:hover { background: #edf6ee; }

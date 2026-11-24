@@ -1,4 +1,5 @@
 import { db, type TextConnectionRecoveryBackup } from './database';
+import { Capacitor } from '@capacitor/core';
 import {
   duplicateExport,
   removeNodePreservingSubprocess,
@@ -14,6 +15,12 @@ import { removeTextConnectedEdges } from './text-connections';
 
 const newId = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
+
+function editedProject(project: Project, timestamp = now()): Project {
+  const platform = Capacitor.getPlatform();
+  const device = platform === 'android' ? 'tablet' : platform === 'web' ? 'desktop' : undefined;
+  return { ...project, updatedAt: timestamp, ...(device ? { lastEditedOn: device } : {}) };
+}
 
 function orderedDiagrams(diagrams: Diagram[], rootId: string): Diagram[] {
   const children = new Map<string, Diagram[]>();
@@ -76,7 +83,7 @@ export async function createProject(name: string): Promise<ExportEnvelope> {
   const cleanName = name.trim();
   if (!cleanName) throw new Error('Digite um nome para o projeto.');
   const timestamp = now();
-  const project: Project = { id: newId(), name: cleanName, rootDiagramId: newId(), createdAt: timestamp, updatedAt: timestamp };
+  const project: Project = editedProject({ id: newId(), name: cleanName, rootDiagramId: newId(), createdAt: timestamp, updatedAt: timestamp }, timestamp);
   const root: Diagram = {
     id: project.rootDiagramId,
     projectId: project.id,
@@ -99,7 +106,7 @@ export async function saveDiagram(changes: Diagram): Promise<void> {
   const current = await exportProject(changes.projectId);
   const candidate = validateExportEnvelope({
     ...current,
-    project: { ...current.project, updatedAt: now() },
+    project: editedProject(current.project),
     diagrams: current.diagrams.map((diagram) => diagram.id === changes.id ? { ...changes, updatedAt: now() } : diagram),
   });
   if (!current.diagrams.some((diagram) => diagram.id === changes.id)) throw new Error('Fluxograma não encontrado.');
@@ -130,7 +137,7 @@ export async function createSubprocess(projectId: string, parentDiagramId: strin
     }
     const candidate = validateExportEnvelope({
       ...envelope,
-      project: { ...envelope.project, updatedAt: timestamp },
+      project: editedProject(envelope.project, timestamp),
       diagrams: [...envelope.diagrams.map((diagram) => diagram.id === parent.id ? { ...parent, updatedAt: timestamp } : diagram), child],
     });
     await db.diagrams.put(candidate.diagrams.find((diagram) => diagram.id === parent.id)!);
@@ -145,8 +152,7 @@ export async function renameProject(projectId: string, name: string): Promise<vo
   if (!cleanName) throw new Error('O nome do projeto não pode ficar vazio.');
   const project = await db.projects.get(projectId);
   if (!project) throw new Error('Projeto não encontrado.');
-  project.name = cleanName;
-  project.updatedAt = now();
+  Object.assign(project, editedProject({ ...project, name: cleanName }));
   await db.projects.put(project);
 }
 
@@ -160,7 +166,8 @@ export async function renameDiagram(projectId: string, diagramId: string, name: 
   diagram.updatedAt = timestamp;
   await db.transaction('rw', db.projects, db.diagrams, async () => {
     await db.diagrams.put(diagram);
-    await db.projects.update(projectId, { updatedAt: timestamp });
+    const project = await db.projects.get(projectId);
+    if (project) await db.projects.put(editedProject(project, timestamp));
   });
 }
 
@@ -172,6 +179,7 @@ export async function importProject(input: unknown): Promise<ExportEnvelope> {
     const diagramConflicts = await db.diagrams.bulkGet(validated.diagrams.map((diagram) => diagram.id));
     if (projectConflict || diagramConflicts.some(Boolean)) envelope = duplicateExport(validated);
     envelope = validateExportEnvelope(envelope);
+    envelope.project = editedProject(envelope.project);
     await db.projects.add(envelope.project);
     await db.diagrams.bulkAdd(envelope.diagrams);
     return envelope;
@@ -215,7 +223,8 @@ export async function deleteDiagramSubtree(projectId: string, diagramId: string)
   await db.transaction('rw', db.projects, db.diagrams, async () => {
     if (target.parentDiagramId) await db.diagrams.put(byId.get(target.parentDiagramId)!);
     await db.diagrams.bulkDelete([...removed]);
-    await db.projects.update(projectId, { updatedAt: now() });
+    const project = await db.projects.get(projectId);
+    if (project) await db.projects.put(editedProject(project));
   });
   return [...removed];
 }
@@ -224,7 +233,7 @@ export async function deleteNodePreservingSubprocess(projectId: string, diagramI
   const envelope = await exportProject(projectId);
   const diagrams = removeNodePreservingSubprocess(envelope.diagrams, diagramId, nodeId);
   const timestamp = now();
-  const candidate = validateExportEnvelope({ ...envelope, project: { ...envelope.project, updatedAt: timestamp }, diagrams });
+  const candidate = validateExportEnvelope({ ...envelope, project: editedProject(envelope.project, timestamp), diagrams });
   await db.transaction('rw', db.projects, db.diagrams, async () => {
     await db.diagrams.bulkPut(candidate.diagrams.map((diagram) => ({ ...diagram, updatedAt: timestamp })));
     await db.projects.put(candidate.project);

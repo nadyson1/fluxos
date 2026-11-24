@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertCircle, Check, Cloud, CloudOff, LoaderCircle, LogIn, LogOut, RefreshCw } from 'lucide-react';
+import { AlertCircle, Check, Cloud, CloudOff, CloudUpload, LoaderCircle, LogIn, LogOut, RefreshCw } from 'lucide-react';
 import type { CloudSyncState } from '../sync/engine';
 
 type Props = {
@@ -20,8 +20,8 @@ export function SyncControl({ state, onSignIn, onSignOut, onSync, onRestore }: P
     try { await action(); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Não foi possível concluir a sincronização.'); }
     finally { setBusy(false); }
   };
-  const Icon = state.status === 'syncing' ? LoaderCircle : state.status === 'error' ? AlertCircle : state.status === 'synced' ? Cloud : CloudOff;
-  const label = state.status === 'syncing' ? 'Sincronizando' : state.status === 'error' ? 'Erro de sincronização' : state.status === 'synced' ? 'Sincronizado' : 'Salvo localmente';
+  const Icon = state.status === 'syncing' ? LoaderCircle : state.status === 'pending' ? CloudUpload : state.status === 'error' ? AlertCircle : state.status === 'synced' ? Cloud : CloudOff;
+  const label = state.status === 'syncing' ? 'Sincronizando' : state.status === 'pending' ? 'Aguardando sincronização' : state.status === 'error' ? 'Erro de sincronização' : state.status === 'synced' ? 'Sincronizado' : 'Salvo localmente';
 
   return <div className="sync-control">
     <button type="button" className={`icon-button top-action sync-trigger sync-${state.status}`} aria-label={`Sincronização: ${label}`} title={`Sincronização: ${label}`} aria-expanded={open} onClick={() => setOpen((value) => !value)}>

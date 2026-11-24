@@ -43,6 +43,8 @@ export type Project = {
   rootDiagramId: string;
   createdAt: string;
   updatedAt: string;
+  /** Last device category that made a user initiated edit. Missing means unknown/legacy. */
+  lastEditedOn?: 'desktop' | 'tablet';
 };
 
 export type ExportEnvelope = {

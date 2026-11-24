@@ -5,19 +5,21 @@ import {
 import { duplicateExport, validateExportEnvelope, type Diagram, type ExportEnvelope, type Project } from '../domain';
 import { db, type SyncedEntity, type SyncConflict } from '../database';
 import { firestore } from './firebase';
+import { normalizeFirestorePayload } from './serialization';
 
 type EntityKind = SyncedEntity['kind'];
 type CloudEntity = { revision: number; deleted: boolean; payload: Project | Diagram | null; committedAt?: unknown };
 export type CloudSyncState = {
-  status: 'local' | 'syncing' | 'synced' | 'error';
+  status: 'local' | 'pending' | 'syncing' | 'synced' | 'error';
   uid: string | null;
   email: string | null;
   message: string;
   conflicts: SyncConflict[];
+  projects: Record<string, { status: 'local' | 'pending' | 'syncing' | 'synced' | 'error' | 'conflict'; message: string }>;
 };
 
 const listeners = new Set<(state: CloudSyncState) => void>();
-let state: CloudSyncState = { status: 'local', uid: null, email: null, message: 'Salvo localmente', conflicts: [] };
+let state: CloudSyncState = { status: 'local', uid: null, email: null, message: 'Salvo localmente', conflicts: [], projects: {} };
 let activeUid: string | null = null;
 let unsubscribeCloud: (() => void) | undefined;
 let unsubscribeDiagramSnapshots = new Map<string, () => void>();
@@ -37,7 +39,55 @@ function emit(next: Partial<CloudSyncState>) {
   for (const listener of listeners) listener(state);
 }
 
+function setProjectSyncStatus(projectId: string, status: CloudSyncState['projects'][string]['status'], message: string) {
+  emit({ projects: { ...state.projects, [projectId]: { status, message } } });
+}
+
+async function refreshProjectSyncStatuses(uid = activeUid): Promise<void> {
+  const records: CloudSyncState['projects'] = {};
+  const projects = await db.projects.toArray();
+  const conflicts = uid ? await db.syncConflicts.where('uid').equals(uid).toArray() : [];
+  const conflictIds = new Set(conflicts.map((item) => item.projectId));
+  for (const project of projects) {
+    const prior = state.projects[project.id];
+    if (conflictIds.has(project.id)) {
+      records[project.id] = { status: 'conflict', message: 'Há versões preservadas que precisam ser revisadas.' };
+      continue;
+    }
+    if (!uid || !navigator.onLine) {
+      records[project.id] = { status: 'local', message: 'Salvo neste dispositivo.' };
+      continue;
+    }
+    const envelope = await getLocalEnvelope(project.id);
+    const clean = envelope ? await isLocalProjectClean(uid, envelope) : false;
+    if (prior?.status === 'error') records[project.id] = prior;
+    else if (prior?.status === 'syncing') records[project.id] = prior;
+    else records[project.id] = clean
+      ? { status: 'synced', message: 'Sincronizado com a nuvem.' }
+      : { status: 'pending', message: 'Alterações aguardando sincronização.' };
+  }
+  emit({ projects: records });
+}
+
+function emitSettledGlobalStatus(uid: string) {
+  if (activeUid !== uid) return;
+  const values = Object.values(state.projects);
+  const conflict = values.some((item) => item.status === 'conflict');
+  const error = values.some((item) => item.status === 'error');
+  const pending = values.some((item) => item.status === 'pending');
+  if (!navigator.onLine) emit({ status: 'local', message: 'Salvo localmente · aguardando conexão' });
+  else if (conflict) emit({ status: 'error', message: 'Sincronização pausada para preservar versões em conflito.' });
+  else if (error) emit({ status: 'error', message: 'Alguns projetos não puderam ser sincronizados.' });
+  else if (pending) emit({ status: 'pending', message: 'Há alterações aguardando sincronização.' });
+  else emit({ status: 'synced', message: 'Sincronizado' });
+}
+
 export function getCloudSyncState(): CloudSyncState { return state; }
+
+export async function refreshProjectSyncState(): Promise<void> {
+  await refreshProjectSyncStatuses();
+  if (activeUid && state.status !== 'syncing') emitSettledGlobalStatus(activeUid);
+}
 
 export function subscribeCloudSync(listener: (state: CloudSyncState) => void): () => void {
   listeners.add(listener);
@@ -161,12 +211,16 @@ async function saveConflict(uid: string, local: ExportEnvelope, cloud: ExportEnv
     reason, localVersion: structuredClone(local), cloudVersion: cloud ? structuredClone(cloud) : null,
   };
   await db.syncConflicts.put(conflict);
+  if (activeUid === uid) setProjectSyncStatus(local.project.id, 'conflict', reason);
   if (activeUid === uid) await refreshConflictList(uid);
   try {
     const ref = conflictRef(uid, local.project.id, id.replaceAll(':', '_'));
     await runTransaction(firestore, async (transaction) => {
       const current = await transaction.get(ref);
-      if (!current.exists()) transaction.set(ref, { id, reason, projectName: local.project.name, localVersion: conflict.localVersion, cloudVersion: conflict.cloudVersion, createdAt: serverTimestamp() });
+      if (!current.exists()) transaction.set(ref, normalizeFirestorePayload({
+        id, reason, projectName: local.project.name,
+        localVersion: conflict.localVersion, cloudVersion: conflict.cloudVersion, createdAt: serverTimestamp(),
+      }));
     });
   } catch {
     // The local IndexedDB recovery copy remains authoritative while offline.
@@ -184,8 +238,9 @@ async function writeVersioned(uid: string, projectId: string, kind: EntityKind, 
     const current = readEntity(snapshot);
     if ((current?.revision ?? null) !== expectedRevision) return null;
     const revision = (current?.revision ?? 0) + 1;
-    transaction.set(ref, { revision, deleted, payload, committedAt: serverTimestamp() });
-    transaction.set(versionRef(ref, revision), { revision, baseRevision: current?.revision ?? 0, deleted, payload, committedAt: serverTimestamp() });
+    const safePayload = payload === null ? null : normalizeFirestorePayload(payload);
+    transaction.set(ref, normalizeFirestorePayload({ revision, deleted, payload: safePayload, committedAt: serverTimestamp() }));
+    transaction.set(versionRef(ref, revision), normalizeFirestorePayload({ revision, baseRevision: current?.revision ?? 0, deleted, payload: safePayload, committedAt: serverTimestamp() }));
     return revision;
   });
 }
@@ -204,6 +259,7 @@ async function pushValue(uid: string, projectId: string, kind: EntityKind, entit
 
 async function pushProject(uid: string, envelope: ExportEnvelope): Promise<void> {
   const projectId = envelope.project.id;
+  setProjectSyncStatus(projectId, 'syncing', 'Enviando alterações para a nuvem.');
   const projectOk = await pushValue(uid, projectId, 'project', projectId, envelope.project);
   if (!projectOk) {
     const cloud = (await listRemote(uid)).get(projectId)?.envelope ?? null;
@@ -224,6 +280,25 @@ async function pushProject(uid: string, envelope: ExportEnvelope): Promise<void>
     const ok = await pushValue(uid, projectId, 'diagram', marker.entityId, null, true);
     if (!ok) await saveConflict(uid, envelope, (await listRemote(uid)).get(projectId)?.envelope ?? null, 'Um fluxograma removido ainda tinha alterações em outro dispositivo.');
   }
+  const projectConflicts = await db.syncConflicts.where('uid').equals(uid).filter((item) => item.projectId === projectId).count();
+  if (!projectConflicts) setProjectSyncStatus(projectId, 'synced', 'Sincronizado com a nuvem.');
+}
+
+async function completeCompatiblePartialProject(uid: string, local: ExportEnvelope, remote: { project: CloudEntity; diagrams: Map<string, CloudEntity>; envelope: ExportEnvelope | null }): Promise<boolean> {
+  if (remote.project.deleted || remote.envelope || !remote.project.payload || typeof remote.project.payload !== 'object') return false;
+  if (contentHash(local.project) !== contentHash(remote.project.payload as Project)) return false;
+  const localDiagrams = new Map(local.diagrams.map((diagram) => [diagram.id, diagram]));
+  for (const [id, entity] of remote.diagrams) {
+    if (entity.deleted || !entity.payload) return false;
+    const localDiagram = localDiagrams.get(id);
+    if (!localDiagram || contentHash(localDiagram) !== contentHash(entity.payload as Diagram)) return false;
+  }
+  await putMarker(uid, local.project.id, 'project', local.project.id, remote.project.revision, contentHash(local.project));
+  for (const [id, entity] of remote.diagrams) {
+    await putMarker(uid, local.project.id, 'diagram', id, entity.revision, contentHash(entity.payload as Diagram));
+  }
+  await pushProject(uid, local);
+  return true;
 }
 
 async function pushDeletedProject(uid: string, projectId: string): Promise<void> {
@@ -329,7 +404,13 @@ async function firstMerge(uid: string): Promise<void> {
       }
       continue;
     }
-    if (!cloud.envelope) continue;
+    if (!cloud.envelope) {
+      if (local && !(await getMarker(uid, 'project', projectId))) {
+        const repaired = await completeCompatiblePartialProject(uid, local, cloud);
+        if (!repaired) await saveConflict(uid, local, null, 'A cópia remota está incompleta e diverge do projeto local. Ambas foram preservadas para recuperação.');
+      }
+      continue;
+    }
     if (!local) {
       const marker = await getMarker(uid, 'project', projectId);
       if (marker?.deleted) continue;
@@ -424,7 +505,10 @@ async function pushAll(uid: string): Promise<void> {
   const localIds = new Set(localProjects.map((project) => project.id));
   for (const project of localProjects) {
     const envelope = await getLocalEnvelope(project.id);
-    if (envelope) await pushProject(uid, envelope);
+    if (envelope) {
+      try { await pushProject(uid, envelope); }
+      catch (error) { setProjectSyncStatus(project.id, 'error', error instanceof Error ? error.message : 'Falha ao sincronizar este projeto.'); }
+    }
   }
   const markers = await db.syncedEntities.where('uid').equals(uid).toArray();
   const missingProjects = new Set(markers.filter((item) => item.kind === 'project' && !item.deleted && !localIds.has(item.projectId)).map((item) => item.projectId));
@@ -434,7 +518,7 @@ async function pushAll(uid: string): Promise<void> {
 let initialPromise: Promise<void> | undefined;
 export async function startCloudSync(uid: string, email: string | null): Promise<void> {
   activeUid = uid;
-  emit({ uid, email, status: 'syncing', message: 'Unindo projetos locais e da nuvem…' });
+  emit({ uid, email, status: 'syncing', message: 'Unindo projetos locais e da nuvem…', projects: {} });
   if (!initialPromise) initialPromise = firstMerge(uid).then(() => undefined).finally(() => { initialPromise = undefined; });
   try {
     await initialPromise;
@@ -460,7 +544,8 @@ export async function startCloudSync(uid: string, email: string | null): Promise
       }
     }, reportError);
     await refreshConflictList(uid);
-    emit({ status: 'synced', message: navigator.onLine ? 'Sincronizado' : 'Salvo localmente' });
+    await refreshProjectSyncStatuses(uid);
+    emitSettledGlobalStatus(uid);
   } catch (error) {
     reportError(error);
   }
@@ -473,7 +558,7 @@ export function stopCloudSync(): void {
   for (const unsubscribe of unsubscribeDiagramSnapshots.values()) unsubscribe();
   unsubscribeDiagramSnapshots = new Map();
   if (debounceTimer) clearTimeout(debounceTimer);
-  emit({ uid: null, email: null, status: 'local', message: 'Salvo localmente', conflicts: [] });
+  emit({ uid: null, email: null, status: 'local', message: 'Salvo localmente', conflicts: [], projects: {} });
 }
 
 export function requestCloudSync(): void {
@@ -483,13 +568,17 @@ export function requestCloudSync(): void {
     const uid = activeUid;
     if (!uid || !navigator.onLine) {
       emit({ status: 'local', message: 'Salvo localmente · aguardando conexão' });
+      if (uid) void refreshProjectSyncStatuses(uid);
       return;
     }
     emit({ status: 'syncing', message: 'Sincronizando…' });
     syncTail = syncTail.then(async () => {
       await pushAll(uid);
       await refreshConflictList(uid);
-      if (activeUid === uid) emit({ status: 'synced', message: 'Sincronizado' });
+      if (activeUid === uid) {
+        await refreshProjectSyncStatuses(uid);
+        emitSettledGlobalStatus(uid);
+      }
     }).catch(reportError);
   }, 500);
 }
@@ -517,7 +606,10 @@ function reportError(error: unknown) {
 
 export function watchNetworkStatus(): () => void {
   const update = () => {
-    if (!navigator.onLine) emit({ status: 'local', message: 'Salvo localmente · aguardando conexão' });
+    if (!navigator.onLine) {
+      emit({ status: 'local', message: 'Salvo localmente · aguardando conexão' });
+      if (activeUid) void refreshProjectSyncStatuses(activeUid);
+    }
     else if (activeUid) requestCloudSync();
   };
   window.addEventListener('online', update);

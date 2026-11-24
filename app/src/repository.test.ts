@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Capacitor } from '@capacitor/core';
 import { db } from './database';
 import * as repository from './repository';
 import type { ExportEnvelope } from './domain';
@@ -20,6 +21,7 @@ const sample: ExportEnvelope = {
 
 describe('repositório local', () => {
   beforeEach(async () => {
+    vi.restoreAllMocks();
     await db.delete();
     await db.open();
   });
@@ -29,6 +31,29 @@ describe('repositório local', () => {
       kind: 'text', label: 'Texto', position: { x: 32, y: 48 },
       fontSize: 18, bold: false, textAlign: 'center', textColor: '#253a2d',
     });
+  });
+
+  it('registra tablet como último dispositivo editor e atualiza a marca após uma edição', async () => {
+    vi.spyOn(Capacitor, 'getPlatform').mockReturnValue('android');
+    const created = await repository.createProject('Edição no tablet');
+    expect(created.project.lastEditedOn).toBe('tablet');
+    const root = { ...created.diagrams[0], name: 'Atualizado no tablet' };
+    await repository.saveDiagram(root);
+    expect((await db.projects.get(created.project.id))?.lastEditedOn).toBe('tablet');
+    vi.restoreAllMocks();
+  });
+
+  it('marca projetos criados e importados na web como editados no computador', async () => {
+    vi.spyOn(Capacitor, 'getPlatform').mockReturnValue('web');
+    const created = await repository.createProject('Edição na web');
+    expect(created.project.lastEditedOn).toBe('desktop');
+    const imported = await repository.importProject({
+      format: 'fluxos-project', schemaVersion: 1, exportedAt: time,
+      project: { id: 'another-id', name: 'Importado', rootDiagramId: 'another-root', createdAt: time, updatedAt: time },
+      diagrams: [{ id: 'another-root', projectId: 'another-id', name: 'Raiz', parentDiagramId: null, ownerNodeId: null, nodes: [], edges: [], createdAt: time, updatedAt: time }],
+    });
+    expect(imported.project.lastEditedOn).toBe('desktop');
+    vi.restoreAllMocks();
   });
 
   it('faz backup antes de recuperar conexões inválidas envolvendo Texto livre', async () => {
