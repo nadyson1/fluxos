@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <defs>
+    <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <path d="M0 0V36M18 0V36" fill="none" stroke="#eef1f5" stroke-width="1.5"/>
+    </pattern>
+    <clipPath id="tile"><rect x="4" y="4" width="184" height="184" rx="22"/></clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect x="4" y="4" width="184" height="184" fill="#fff"/>
+    <rect x="4" y="4" width="184" height="184" fill="url(#grid)"/>
+    <path d="M84 54 75 65 126 116 137 106 117 86 137 63 127 54 106 75Z M63 75 54 85 75 106 54 128 64 137 85 116 107 137 116 127Z" fill="#56b5f5"/>
+  </g>
+  <rect x="4.75" y="4.75" width="182.5" height="182.5" rx="21.25" fill="none" stroke="#d4d8de" stroke-width="1.5"/>
+</svg>

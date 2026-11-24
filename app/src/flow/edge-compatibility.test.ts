@@ -3,15 +3,13 @@ import type { FlowEdge } from '../domain';
 import { normalizeLegacyTargetToTargetEdge } from './edge-compatibility';
 
 describe('compatibilidade de conexões salvas', () => {
-  it('restaura o sentido original de uma conexão antiga entre duas âncoras de entrada', () => {
+  it('não inverte uma conexão moderna válida iniciada em âncoras antes de entrada', () => {
     const edge: FlowEdge = {
       id: 'legacy', source: 'processo', target: 'inicio',
       sourceHandle: 'in-left', targetHandle: 'in-bottom', label: 'Retorno', style: 'smoothstep',
     };
 
-    expect(normalizeLegacyTargetToTargetEdge(edge)).toEqual({
-      ...edge, source: 'inicio', target: 'processo', sourceHandle: 'in-bottom', targetHandle: 'in-left',
-    });
+    expect(normalizeLegacyTargetToTargetEdge(edge)).toBe(edge);
   });
 
   it('preserva arestas previamente válidas e seus metadados', () => {

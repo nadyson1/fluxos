@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['favicon.svg', 'fluxos-icon-v2.svg'],
       manifest: {
         id: './',
         name: 'Fluxos — Editor de processos',
@@ -25,10 +25,10 @@ export default defineConfig(({ mode }) => {
         orientation: 'any',
         start_url: './',
         icons: [
-          { src: './pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: './pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
-          { src: './pwa-192.svg', sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
-          { src: './pwa-512.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' },
+          { src: './pwa-192-v2.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: './pwa-512-v2.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: './pwa-maskable-512-v2.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: './fluxos-icon-v2.svg', sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
         ],
       },
       workbox: { globPatterns: ['**/*.{js,css,html,svg,ico,png,webmanifest}'] },

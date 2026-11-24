@@ -10,9 +10,9 @@ import type { Diagram, FlowEdge, FlowNode, NodeKind } from '../domain';
 import { makeNode } from '../repository';
 import { FlowEdgeView, type CanvasEdge, type FlowEdgeData } from './FlowEdgeView';
 import { FlowNodeView, type CanvasNode, type FlowNodeData } from './FlowNodeView';
-import { getLooseConnectionInsertTarget } from './connection-insert';
-import { calculatePinchViewport, requiresCustomPinch, shouldReleaseTouchSnapshot, updatePinchGesture, type PinchPoint, type PinchViewport } from './pinch-gesture';
+import { getConnectionHandlesForNewNode, getLooseConnectionInsertTarget } from './connection-insert';
 import { normalizeLegacyTargetToTargetEdge } from './edge-compatibility';
+import { calculatePinchViewport, requiresCustomPinch, shouldReleaseTouchSnapshot, updatePinchGesture, type PinchPoint, type PinchViewport } from './pinch-gesture';
 import type { EditorTool } from '../components/ToolRail';
 import { ProcessTree } from '../components/ProcessTree';
 
@@ -23,6 +23,7 @@ type MenuState = {
   edgeId?: string;
   addAt?: { x: number; y: number };
   sourceId?: string;
+  sourceHandle?: string;
   anchorRect?: { left: number; right: number; top: number; bottom: number };
   elementRect?: { left: number; right: number; top: number; bottom: number };
 };
@@ -104,15 +105,15 @@ function makeCanvasEdge(
   onEditingChange: FlowEdgeData['onEditingChange'],
   onOpenMenu: FlowEdgeData['onOpenMenu'],
 ): CanvasEdge {
-  const compatibleEdge = normalizeLegacyTargetToTargetEdge(edge);
+  const persistedEdge = normalizeLegacyTargetToTargetEdge(edge);
   return {
-    id: compatibleEdge.id, source: compatibleEdge.source, target: compatibleEdge.target,
-    sourceHandle: compatibleEdge.sourceHandle, targetHandle: compatibleEdge.targetHandle,
+    id: persistedEdge.id, source: persistedEdge.source, target: persistedEdge.target,
+    sourceHandle: persistedEdge.sourceHandle, targetHandle: persistedEdge.targetHandle,
     type: 'flowEdge', markerEnd: { type: MarkerType.ArrowClosed, color: '#2e6647' },
     style: { stroke: '#2e6647', strokeWidth: 2 },
     data: {
-      onRename, onEditingChange, onOpenMenu, labelText: compatibleEdge.label ?? '',
-      lineStyle: compatibleEdge.style ?? 'smoothstep', editingLabel: false,
+      onRename, onEditingChange, onOpenMenu, labelText: persistedEdge.label ?? '',
+      lineStyle: persistedEdge.style ?? 'smoothstep', editingLabel: false,
     }, reconnectable: true,
   };
 }
@@ -490,17 +491,24 @@ const FlowCanvasInner = forwardRef<FlowCanvasHandle, Props>(function FlowCanvasI
   const onNodesChange = useCallback((changes: NodeChangeset<CanvasNode>) => setNodes((current) => changes.applyTo(current)), []);
   const onEdgesChange = useCallback((changes: EdgeChangeset<CanvasEdge>) => setEdges((current) => changes.applyTo(current)), []);
 
-  const addNode = useCallback((kind: NodeKind, position: { x: number; y: number }, sourceId?: string) => {
+  const addNode = useCallback((kind: NodeKind, position: { x: number; y: number }, connection?: { sourceId: string; sourceHandle: string }) => {
     recordHistory();
     const node = makeNode(kind, position.x, position.y);
     setNodes((current) => [...current, emptyNodeCallbacks(node, setNodeLabel, nodeOpen, openNodeActions)]);
-    if (sourceId) {
-      const edge = makeCanvasEdge({ id: crypto.randomUUID(), source: sourceId, target: node.id, style: 'smoothstep' }, setEdgeLabel, setEdgeEditing, openEdgeActions);
+    if (connection) {
+      const sourceNode = nodes.find((item) => item.id === connection.sourceId);
+      const handles = sourceNode
+        ? getConnectionHandlesForNewNode(connection.sourceHandle, sourceNode.position, position)
+        : { sourceHandle: connection.sourceHandle, targetHandle: 'in-left' };
+      const edge = makeCanvasEdge({
+        id: crypto.randomUUID(), source: connection.sourceId, target: node.id,
+        ...handles, style: 'smoothstep',
+      }, setEdgeLabel, setEdgeEditing, openEdgeActions);
       setEdges((current) => [...current, edge]);
     }
     props.onToolChange('select');
     setMenu(null);
-  }, [nodeOpen, openEdgeActions, openNodeActions, props.onToolChange, recordHistory, setEdgeEditing, setEdgeLabel, setNodeLabel]);
+  }, [nodeOpen, nodes, openEdgeActions, openNodeActions, props.onToolChange, recordHistory, setEdgeEditing, setEdgeLabel, setNodeLabel]);
 
   const onPaneClick = useCallback((event: MouseEvent | ReactMouseEvent<Element, MouseEvent>) => {
     if (menu) { setMenu(null); return; }
@@ -523,7 +531,7 @@ const FlowCanvasInner = forwardRef<FlowCanvasHandle, Props>(function FlowCanvasI
     const insertTarget = getLooseConnectionInsertTarget(state);
     if (!insertTarget) return;
     const point = clientPoint(event);
-    setMenu({ x: point.x, y: point.y, addAt: insertTarget.position, sourceId: insertTarget.sourceId });
+    setMenu({ x: point.x, y: point.y, addAt: insertTarget.position, sourceId: insertTarget.sourceId, sourceHandle: insertTarget.sourceHandle });
   }, []);
 
   const onReconnect = useCallback((oldEdge: CanvasEdge, newConnection: Connection) => {
@@ -758,7 +766,7 @@ const FlowCanvasInner = forwardRef<FlowCanvasHandle, Props>(function FlowCanvasI
           </>}
           {menu.addAt && <>
             <p className="context-heading">Inserir bloco conectado</p>
-            {(['process', 'decision', 'startEnd', 'inputOutput', 'note', 'text'] as NodeKind[]).map((kind) => <button key={kind} type="button" role="menuitem" onClick={() => addNode(kind, menu.addAt!, menu.sourceId)}>{({ process: 'Processo', decision: 'Decisão', startEnd: 'Início / fim', inputOutput: 'Entrada / saída', note: 'Anotação', text: 'Texto livre' })[kind]}</button>)}
+            {(['process', 'decision', 'startEnd', 'inputOutput', 'note', 'text'] as NodeKind[]).map((kind) => <button key={kind} type="button" role="menuitem" onClick={() => menu.sourceId && menu.sourceHandle ? addNode(kind, menu.addAt!, { sourceId: menu.sourceId, sourceHandle: menu.sourceHandle }) : addNode(kind, menu.addAt!)}>{({ process: 'Processo', decision: 'Decisão', startEnd: 'Início / fim', inputOutput: 'Entrada / saída', note: 'Anotação', text: 'Texto livre' })[kind]}</button>)}
           </>}
         </div>
       </>}

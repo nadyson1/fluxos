@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import {
   AlertCircle, Check, ChevronRight, FileDown, FileUp, FolderOpen, LoaderCircle, MoreHorizontal,
-  Network, Redo2, Search, Undo2, Workflow, X,
+  Network, Redo2, Search, Undo2, X,
 } from 'lucide-react';
 import type { ChangeEvent, PointerEvent as ReactPointerEvent } from 'react';
 import sampleProject from '../../samples/operacao-velluto.sample.json';
@@ -344,7 +344,7 @@ export default function App() {
       <a className="skip-link" href="#main-content">Ir para o conteúdo</a>
       <header className="topbar">
         <button type="button" className="brand-lockup" onClick={async () => { await canvasRef.current?.flushSave(); setView('library'); setTreeOpen(false); }} aria-label="Fluxos, biblioteca de projetos">
-          <span className="brand-mark"><Workflow size={22} strokeWidth={1.8} aria-hidden="true" /></span><strong>Fluxos</strong>
+          <span className="brand-mark"><img src={`${import.meta.env.BASE_URL}fluxos-icon-v2.svg`} alt="" /></span><strong>Fluxos</strong>
         </button>
         <span className="topbar-rule" />
         {view === 'editor' && activeProject && activeDiagram ? <>
