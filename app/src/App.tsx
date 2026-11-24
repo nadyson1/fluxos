@@ -8,6 +8,7 @@ import type { ChangeEvent, PointerEvent as ReactPointerEvent } from 'react';
 import sampleProject from '../../samples/operacao-velluto.sample.json';
 import { GlobalSearch } from './components/GlobalSearch';
 import { ProjectLibrary } from './components/ProjectLibrary';
+import { SyncControl } from './components/SyncControl';
 import { ToolRail, type EditorTool } from './components/ToolRail';
 import { FlowCanvas, type FlowCanvasHandle } from './flow/FlowCanvas';
 import { enqueueSave } from './save-queue';
@@ -17,6 +18,9 @@ import {
   createProject, createSubprocess, deleteDiagramSubtree, deleteNodePreservingSubprocess, deleteProject,
   duplicateProject, exportProject, importProject, listProjects, renameDiagram, renameProject, saveDiagram,
 } from './repository';
+import { getCloudSyncState, requestCloudSync, restoreConflictVersion, setRemoteApplyHooks, startCloudSync, stopCloudSync, subscribeCloudSync, watchNetworkStatus } from './sync/engine';
+import { observeFirebaseUser, signInWithGoogle, signOutOfGoogle } from './sync/firebase';
+import type { CloudSyncState } from './sync/engine';
 
 type ProjectRecord = { project: Project; diagrams: Diagram[] };
 type JsonExportPlugin = { save(options: { filename: string; content: string }): Promise<{ cancelled: boolean; uri?: string }> };
@@ -48,6 +52,7 @@ export default function App() {
   const [dialogBusy, setDialogBusy] = useState(false);
   const [dialogError, setDialogError] = useState('');
   const [saveState, setSaveState] = useState<SaveState>('saved');
+  const [cloudSync, setCloudSync] = useState<CloudSyncState>(() => getCloudSyncState());
   const [history, setHistory] = useState({ canUndo: false, canRedo: false });
   const [focusNodeId, setFocusNodeId] = useState<string>();
   const [dragPreview, setDragPreview] = useState<{ x: number; y: number; label: string } | null>(null);
@@ -58,6 +63,10 @@ export default function App() {
   const dragRef = useRef<{ id: number; kind: string; label: string; startX: number; startY: number; x: number; y: number; moved: boolean } | null>(null);
   const skipToolClickRef = useRef(false);
   const searchButtonRef = useRef<HTMLButtonElement>(null);
+  const activeProjectIdRef = useRef(activeProjectId);
+  const viewRef = useRef(view);
+  activeProjectIdRef.current = activeProjectId;
+  viewRef.current = view;
 
   const activeProject = useMemo(() => projectData?.project, [projectData]);
   const activeDiagram = useMemo(() => projectData?.diagrams.find((diagram) => diagram.id === activeDiagramId), [projectData, activeDiagramId]);
@@ -82,11 +91,42 @@ export default function App() {
       return { project: envelope.project, diagrams: envelope.diagrams };
     }));
     setProjects(records);
+    requestCloudSync();
     return records;
   }, []);
 
   useEffect(() => {
     void refreshProjects().catch(() => setSaveState('error'));
+  }, [refreshProjects]);
+
+  useEffect(() => {
+    const unsubscribeState = subscribeCloudSync(setCloudSync);
+    const unsubscribeNetwork = watchNetworkStatus();
+    setRemoteApplyHooks({
+      beforeApply: async (projectId) => {
+        if (viewRef.current === 'editor' && activeProjectIdRef.current === projectId) await canvasRef.current?.flushSave();
+      },
+      afterApply: async (projectId) => {
+        await refreshProjects();
+        if (activeProjectIdRef.current === projectId) setProjectData(await exportProject(projectId));
+      },
+    });
+    let unsubscribeAuth: (() => void) | undefined;
+    let disposed = false;
+    void observeFirebaseUser((user) => {
+      if (user) void startCloudSync(user.uid, user.email);
+      else stopCloudSync();
+    }).then((unsubscribe) => {
+      if (disposed) unsubscribe(); else unsubscribeAuth = unsubscribe;
+    }).catch((error) => setCloudSync({ ...getCloudSyncState(), status: 'error', message: error instanceof Error ? error.message : 'Não foi possível iniciar a autenticação.' }));
+    return () => {
+      disposed = true;
+      unsubscribeAuth?.();
+      unsubscribeNetwork();
+      unsubscribeState();
+      setRemoteApplyHooks({});
+      stopCloudSync();
+    };
   }, [refreshProjects]);
 
   useEffect(() => {
@@ -183,6 +223,7 @@ export default function App() {
         diagrams: current.diagrams.map((item) => item.id === diagram.id ? diagram : item),
       } : current);
       if (sequence === saveSequenceRef.current) setSaveState('saved');
+      requestCloudSync();
       void refreshProjects();
     }).catch((error) => {
       if (sequence === saveSequenceRef.current) setSaveState('error');
@@ -336,6 +377,8 @@ export default function App() {
   };
 
   const historyChange = useCallback((canUndo: boolean, canRedo: boolean) => setHistory({ canUndo, canRedo }), []);
+  const handleCloudSignIn = async () => { await canvasRef.current?.flushSave(); await signInWithGoogle(); };
+  const handleCloudSignOut = async () => { await canvasRef.current?.flushSave(); await signOutOfGoogle(); stopCloudSync(); };
   const exampleImported = projects.some(({ project }) => project.id === sampleProject.project.id);
   const rootDiagramId = projectData?.project.rootDiagramId;
 
@@ -364,6 +407,13 @@ export default function App() {
             <button type="button" className="icon-button top-action" title="Refazer (Ctrl+Y)" aria-label="Refazer" disabled={!history.canRedo} onClick={() => canvasRef.current?.redo()}><Redo2 size={20} /></button>
             <span className="topbar-rule" />
           </>}
+          <SyncControl
+            state={cloudSync}
+            onSignIn={handleCloudSignIn}
+            onSignOut={handleCloudSignOut}
+            onSync={requestCloudSync}
+            onRestore={async (conflictId, version) => { await restoreConflictVersion(conflictId, version); await refreshProjects(); }}
+          />
           <button ref={searchButtonRef} type="button" className="icon-button top-action" aria-label="Buscar em todos os projetos" title="Buscar em todos os projetos (Ctrl+K)" onClick={() => setSearchOpen(true)}><Search size={21} /></button>
           <div className="top-menu-anchor">
             <button type="button" className="icon-button top-action" aria-label="Mais ações" title="Mais ações" aria-expanded={topMenuOpen} onClick={() => setTopMenuOpen((value) => !value)}><MoreHorizontal size={22} /></button>

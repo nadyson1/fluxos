@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "432682270495",
+    "project_id": "fluxos-sync",
+    "storage_bucket": "fluxos-sync.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:432682270495:android:bdb015e6adb28c03c6fa2a",
+        "android_client_info": {
+          "package_name": "app.fluxos.editor"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "432682270495-3q1ihuvuqa4e90bi4oa4e7nhbeetlg68.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "app.fluxos.editor",
+            "certificate_hash": "f2ec4f36ef9055cba627a867e5730f3c24687812"
+          }
+        },
+        {
+          "client_id": "432682270495-e0tge36ti5pkm978f4s7pmnl9n2e8o4d.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBhkYyWASRSeCRRyr5oHboReFdnlQMF_Cc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "432682270495-e0tge36ti5pkm978f4s7pmnl9n2e8o4d.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedInAs(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function validEntity(entityId) {
+      return request.resource.data.keys().hasOnly(['revision', 'deleted', 'payload', 'committedAt'])
+        && request.resource.data.revision is int
+        && request.resource.data.revision > 0
+        && request.resource.data.deleted is bool
+        && request.resource.data.committedAt == request.time
+        && (request.resource.data.deleted
+          ? request.resource.data.payload == null
+          : request.resource.data.payload is map && request.resource.data.payload.id == entityId);
+    }
+
+    match /users/{uid}/projects/{projectId} {
+      allow get, list: if signedInAs(uid);
+      allow create: if signedInAs(uid) && validEntity(projectId) && request.resource.data.revision == 1;
+      allow update: if signedInAs(uid) && validEntity(projectId)
+        && request.resource.data.revision == resource.data.revision + 1;
+      allow delete: if false;
+
+      match /diagrams/{diagramId} {
+        allow get, list: if signedInAs(uid);
+        allow create: if signedInAs(uid) && validEntity(diagramId) && request.resource.data.revision == 1;
+        allow update: if signedInAs(uid) && validEntity(diagramId)
+          && request.resource.data.revision == resource.data.revision + 1;
+        allow delete: if false;
+
+        match /versions/{versionId} {
+          allow get, list: if signedInAs(uid);
+          allow create: if signedInAs(uid)
+            && request.resource.data.keys().hasOnly(['revision', 'baseRevision', 'deleted', 'payload', 'committedAt'])
+            && request.resource.data.revision is int
+            && request.resource.data.baseRevision is int
+            && request.resource.data.revision == request.resource.data.baseRevision + 1
+            && request.resource.data.deleted is bool
+            && request.resource.data.committedAt == request.time
+            && (request.resource.data.deleted || request.resource.data.payload is map);
+          allow update, delete: if false;
+        }
+      }
+
+      match /versions/{versionId} {
+        allow get, list: if signedInAs(uid);
+        allow create: if signedInAs(uid)
+          && request.resource.data.keys().hasOnly(['revision', 'baseRevision', 'deleted', 'payload', 'committedAt'])
+          && request.resource.data.revision is int
+          && request.resource.data.baseRevision is int
+          && request.resource.data.revision == request.resource.data.baseRevision + 1
+          && request.resource.data.deleted is bool
+          && request.resource.data.committedAt == request.time
+          && (request.resource.data.deleted || request.resource.data.payload is map);
+        allow update, delete: if false;
+      }
+
+      match /conflicts/{conflictId} {
+        allow get, list: if signedInAs(uid);
+        allow create: if signedInAs(uid)
+          && request.resource.data.keys().hasOnly(['id', 'reason', 'projectName', 'localVersion', 'cloudVersion', 'createdAt'])
+          && request.resource.data.id is string
+          && request.resource.data.reason is string
+          && request.resource.data.projectName is string
+          && request.resource.data.localVersion is map
+          && (request.resource.data.cloudVersion == null || request.resource.data.cloudVersion is map)
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

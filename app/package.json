@@ -13,11 +13,13 @@
     "cap:open": "cap open android"
   },
   "dependencies": {
+    "@capacitor-firebase/authentication": "^8.6.0",
     "@capacitor/android": "^8.0.0",
     "@capacitor/core": "^8.0.0",
     "@xyflow/react": "13.0.0",
     "dexie": "^4.2.1",
     "dexie-react-hooks": "^1.1.7",
+    "firebase": "^12.19.0",
     "lucide-react": "^0.468.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

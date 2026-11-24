@@ -5,6 +5,11 @@ const config: CapacitorConfig = {
   appName: 'Fluxos',
   webDir: 'dist',
   android: { allowMixedContent: false },
+  plugins: {
+    FirebaseAuthentication: {
+      providers: ['google.com'],
+    },
+  },
 };
 
 export default config;
