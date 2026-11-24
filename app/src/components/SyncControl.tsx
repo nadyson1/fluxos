@@ -4,14 +4,15 @@ import type { CloudSyncState } from '../sync/engine';
 
 type Props = {
   state: CloudSyncState;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSignIn: () => Promise<void>;
   onSignOut: () => Promise<void>;
   onSync: () => void;
   onRestore: (conflictId: string, version: 'local' | 'cloud') => Promise<void>;
 };
 
-export function SyncControl({ state, onSignIn, onSignOut, onSync, onRestore }: Props) {
-  const [open, setOpen] = useState(false);
+export function SyncControl({ state, open, onOpenChange, onSignIn, onSignOut, onSync, onRestore }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const run = async (action: () => Promise<void>) => {
@@ -24,12 +25,12 @@ export function SyncControl({ state, onSignIn, onSignOut, onSync, onRestore }: P
   const label = state.status === 'syncing' ? 'Sincronizando' : state.status === 'pending' ? 'Aguardando sincronização' : state.status === 'error' ? 'Erro de sincronização' : state.status === 'synced' ? 'Sincronizado' : 'Salvo localmente';
 
   return <div className="sync-control">
-    <button type="button" className={`icon-button top-action sync-trigger sync-${state.status}`} aria-label={`Sincronização: ${label}`} title={`Sincronização: ${label}`} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+    <button type="button" className={`icon-button top-action sync-trigger sync-${state.status}`} aria-label={`Sincronização: ${label}`} title={`Sincronização: ${label}`} aria-expanded={open} onClick={() => onOpenChange(!open)}>
       <Icon size={19} className={state.status === 'syncing' ? 'spin' : undefined} />
       {state.conflicts.length > 0 && <span className="sync-conflict-count" aria-label={`${state.conflicts.length} conflitos`}>{state.conflicts.length}</span>}
     </button>
     {open && <>
-      <button type="button" className="outside-dismiss" aria-label="Fechar painel de sincronização" onClick={() => setOpen(false)} />
+      <button type="button" className="outside-dismiss" aria-label="Fechar painel de sincronização" onClick={() => onOpenChange(false)} />
       <section className="sync-panel" aria-label="Sincronização de projetos">
         <div className="sync-panel-heading"><div><strong>{label}</strong><p>{state.message}</p></div><span className={`sync-dot sync-dot-${state.status}`} /></div>
         {state.uid ? <>

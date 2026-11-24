@@ -444,22 +444,11 @@ async function reconcileRemote(uid: string, projectId: string): Promise<void> {
   if (activeUid !== uid) return;
   const remote = (await listRemote(uid)).get(projectId);
   if (!remote) return;
-  const local = await getLocalEnvelope(projectId);
   if (remote.project.deleted) {
-    if (!local) {
-      await putMarker(uid, projectId, 'project', projectId, remote.project.revision, '', true);
-      await refreshConflictList(uid);
-      return;
-    }
-    const marker = await getMarker(uid, 'project', projectId);
-    if (marker && await isLocalProjectClean(uid, local)) {
-      await deleteLocalEnvelope(projectId);
-      await putMarker(uid, projectId, 'project', projectId, remote.project.revision, '', true);
-    } else {
-      await saveConflict(uid, local, null, 'A nuvem excluiu este projeto enquanto havia alterações locais. A cópia local foi mantida.');
-    }
+    await applyRemoteProjectTombstone(uid, projectId, remote.project.revision);
     return;
   }
+  const local = await getLocalEnvelope(projectId);
   if (!remote.envelope) return;
   if (!local) {
     await importCloudEnvelope(uid, remote.envelope, remote);
@@ -498,6 +487,30 @@ async function reconcileRemote(uid: string, projectId: string): Promise<void> {
   }
   const id = `${uid}:${projectId}:remote-${remote.project.revision}-${[...remote.diagrams.values()].map((item) => item.revision).join('-')}`;
   await saveConflict(uid, local, remote.envelope, 'Há alterações locais e remotas desde a última sincronização. Nenhuma versão foi sobrescrita.', id);
+}
+
+export async function applyRemoteProjectTombstone(uid: string, projectId: string, revision: number): Promise<void> {
+  let local = await getLocalEnvelope(projectId);
+  if (local) {
+    // Flush the open editor before deciding whether the remote tombstone can be
+    // applied. Otherwise unsaved canvas changes could be discarded as "clean".
+    await beforeRemoteApply?.(projectId);
+    local = await getLocalEnvelope(projectId);
+  }
+  if (!local) {
+    await putMarker(uid, projectId, 'project', projectId, revision, '', true);
+    await refreshConflictList(uid);
+    await afterRemoteApply?.(projectId);
+    return;
+  }
+  const marker = await getMarker(uid, 'project', projectId);
+  if (marker && await isLocalProjectClean(uid, local)) {
+    await deleteLocalEnvelope(projectId);
+    await putMarker(uid, projectId, 'project', projectId, revision, '', true);
+    await afterRemoteApply?.(projectId);
+    return;
+  }
+  await saveConflict(uid, local, null, 'A nuvem excluiu este projeto enquanto havia alterações locais. A cópia local foi mantida.');
 }
 
 async function pushAll(uid: string): Promise<void> {

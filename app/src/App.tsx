@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import {
   AlertCircle, Check, ChevronRight, FileDown, FileUp, FolderOpen, LoaderCircle, MoreHorizontal,
   Network, Redo2, Search, Undo2, X,
@@ -47,6 +48,8 @@ export default function App() {
   const [treeOpen, setTreeOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [topMenuOpen, setTopMenuOpen] = useState(false);
+  const [libraryMenuId, setLibraryMenuId] = useState<string | null>(null);
+  const [syncPanelOpen, setSyncPanelOpen] = useState(false);
   const [dialog, setDialog] = useState<ConfirmState | null>(null);
   const [dialogValue, setDialogValue] = useState('');
   const [dialogBusy, setDialogBusy] = useState(false);
@@ -65,6 +68,8 @@ export default function App() {
   const searchButtonRef = useRef<HTMLButtonElement>(null);
   const activeProjectIdRef = useRef(activeProjectId);
   const viewRef = useRef(view);
+  const backHandlerRef = useRef<() => Promise<void>>(async () => {});
+  const handlingBackRef = useRef(false);
   activeProjectIdRef.current = activeProjectId;
   viewRef.current = view;
 
@@ -108,8 +113,20 @@ export default function App() {
         if (viewRef.current === 'editor' && activeProjectIdRef.current === projectId) await canvasRef.current?.flushSave();
       },
       afterApply: async (projectId) => {
-        await refreshProjects();
-        if (activeProjectIdRef.current === projectId) setProjectData(await exportProject(projectId));
+        const refreshed = await refreshProjects();
+        if (activeProjectIdRef.current === projectId) {
+          if (refreshed.some(({ project }) => project.id === projectId)) {
+            setProjectData(await exportProject(projectId));
+          } else {
+            setProjectData(null);
+            setActiveProjectId('');
+            setActiveDiagramId('');
+            setActiveTool('select');
+            setFocusNodeId(undefined);
+            setTreeOpen(false);
+            setView('library');
+          }
+        }
       },
     });
     let unsubscribeAuth: (() => void) | undefined;
@@ -210,6 +227,61 @@ export default function App() {
     setFocusNodeId(undefined);
     setActiveTool('select');
   }, [activeProjectId]);
+
+  backHandlerRef.current = async () => {
+    if (handlingBackRef.current) return;
+    handlingBackRef.current = true;
+    try {
+      if (dialog) {
+        if (!dialogBusy) {
+          setDialog(null);
+          setDialogError('');
+        }
+        return;
+      }
+      if (canvasRef.current?.closeOverlay()) return;
+      if (searchOpen) { setSearchOpen(false); return; }
+      if (topMenuOpen) { setTopMenuOpen(false); return; }
+      if (libraryMenuId) { setLibraryMenuId(null); return; }
+      if (syncPanelOpen) { setSyncPanelOpen(false); return; }
+      if (treeOpen) { setTreeOpen(false); return; }
+      if (view === 'editor') {
+        const parentId = projectData?.diagrams.find((item) => item.id === activeDiagramId)?.parentDiagramId;
+        if (parentId) {
+          await navigateDiagram(parentId);
+        } else {
+          await canvasRef.current?.flushSave();
+          setView('library');
+          setTreeOpen(false);
+          setFocusNodeId(undefined);
+        }
+        return;
+      }
+      await CapacitorApp.exitApp();
+    } catch {
+      setSaveState('error');
+    } finally {
+      handlingBackRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== 'android') return;
+    let disposed = false;
+    let listener: { remove: () => Promise<void> } | undefined;
+    void CapacitorApp.addListener('backButton', () => {
+      void backHandlerRef.current();
+    }).then((handle) => {
+      if (disposed) void handle.remove();
+      else listener = handle;
+    }).catch((error: unknown) => {
+      console.error('Não foi possível registrar o botão Voltar do Android.', error);
+    });
+    return () => {
+      disposed = true;
+      void listener?.remove();
+    };
+  }, []);
 
   const handleCanvasNavigate = useCallback((diagramId: string) => { void navigateDiagram(diagramId); }, [navigateDiagram]);
 
@@ -410,6 +482,8 @@ export default function App() {
           </>}
           <SyncControl
             state={cloudSync}
+            open={syncPanelOpen}
+            onOpenChange={setSyncPanelOpen}
             onSignIn={handleCloudSignIn}
             onSignOut={handleCloudSignOut}
             onSync={requestCloudSync}
@@ -447,6 +521,8 @@ export default function App() {
         <ProjectLibrary
           projects={projects}
           syncStates={cloudSync.projects}
+          openMenuId={libraryMenuId}
+          onOpenMenuChange={setLibraryMenuId}
           onCreate={showCreateProject}
           onOpen={(projectId, diagramId) => { void openProjectAt(projectId, diagramId); }}
           onRename={showRenameProject}

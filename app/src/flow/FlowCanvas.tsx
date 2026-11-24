@@ -35,6 +35,7 @@ export type FlowCanvasHandle = {
   addNodeAt: (kind: NodeKind, clientX: number, clientY: number) => void;
   focusNode: (nodeId: string) => void;
   flushSave: () => Promise<void>;
+  closeOverlay: () => boolean;
 };
 
 type Props = {
@@ -281,8 +282,24 @@ const FlowCanvasInner = forwardRef<FlowCanvasHandle, Props>(function FlowCanvasI
         void flowRef.current.fitView({ nodes: [{ id: nodeId }], padding: 0.45, minZoom: zoom, maxZoom: zoom, duration: 280 });
       }));
     },
+    closeOverlay: () => {
+      if (menu) {
+        setMenu(null);
+        setEditingMenuText(false);
+        return true;
+      }
+      if (contextPosition) {
+        setContextPosition(null);
+        return true;
+      }
+      if (textConversionError) {
+        setTextConversionError('');
+        return true;
+      }
+      return false;
+    },
     flushSave,
-  }), [flushSave, nodeOpen, openNodeActions, props.onToolChange, recordHistory, restoreSnapshot, setNodeLabel, updateHistoryState, viewport.zoom]);
+  }), [contextPosition, flushSave, menu, nodeOpen, openNodeActions, props.onToolChange, recordHistory, restoreSnapshot, setNodeLabel, textConversionError, updateHistoryState, viewport.zoom]);
 
   useEffect(() => {
     setNodes(diagram.nodes.map((node) => emptyNodeCallbacks(node, setNodeLabel, nodeOpen, openNodeActions)));

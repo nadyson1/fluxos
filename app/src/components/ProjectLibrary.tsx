@@ -7,6 +7,8 @@ type ProjectRecord = { project: Project; diagrams: Diagram[] };
 type Props = {
   projects: ProjectRecord[];
   syncStates: Record<string, { status: 'local' | 'pending' | 'syncing' | 'synced' | 'error' | 'conflict'; message: string }>;
+  openMenuId: string | null;
+  onOpenMenuChange: (id: string | null) => void;
   onCreate: () => void;
   onOpen: (projectId: string, diagramId: string) => void;
   onRename: (project: Project) => void;
@@ -17,7 +19,7 @@ type Props = {
   exampleImported: boolean;
 };
 
-export function ProjectLibrary({ projects, syncStates, onCreate, onOpen, onRename, onDuplicate, onDelete, onSearch, onImportExample, exampleImported }: Props) {
+export function ProjectLibrary({ projects, syncStates, openMenuId, onOpenMenuChange, onCreate, onOpen, onRename, onDuplicate, onDelete, onSearch, onImportExample, exampleImported }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [query, setQuery] = useState('');
   const visibleProjects = useMemo(() => {
@@ -66,11 +68,11 @@ export function ProjectLibrary({ projects, syncStates, onCreate, onOpen, onRenam
               <div className="project-entry-actions">
                 <button className="button button-open" type="button" onClick={() => root && onOpen(project.id, root.id)}>Abrir</button>
                 <div className="menu-anchor">
-                  <button className="icon-button" type="button" aria-label={`Ações para ${project.name}`} title="Ações do projeto" onClick={() => toggle(`menu-${project.id}`)}><MoreHorizontal size={20} /></button>
-                  {expanded.has(`menu-${project.id}`) && <div className="small-menu">
-                    <button type="button" onClick={() => { toggle(`menu-${project.id}`); onRename(project); }}><Pencil size={16} />Renomear</button>
-                    <button type="button" onClick={() => { toggle(`menu-${project.id}`); onDuplicate(project); }}><Copy size={16} />Duplicar</button>
-                    <button type="button" className="danger-action" onClick={() => { toggle(`menu-${project.id}`); onDelete(project); }}><Trash2 size={16} />Excluir</button>
+                  <button className="icon-button" type="button" aria-label={`Ações para ${project.name}`} title="Ações do projeto" aria-expanded={openMenuId === `menu-${project.id}`} onClick={() => onOpenMenuChange(openMenuId === `menu-${project.id}` ? null : `menu-${project.id}`)}><MoreHorizontal size={20} /></button>
+                  {openMenuId === `menu-${project.id}` && <div className="small-menu">
+                    <button type="button" onClick={() => { onOpenMenuChange(null); onRename(project); }}><Pencil size={16} />Renomear</button>
+                    <button type="button" onClick={() => { onOpenMenuChange(null); onDuplicate(project); }}><Copy size={16} />Duplicar</button>
+                    <button type="button" className="danger-action" onClick={() => { onOpenMenuChange(null); onDelete(project); }}><Trash2 size={16} />Excluir</button>
                   </div>}
                 </div>
                 <button className="icon-button" type="button" aria-expanded={open} aria-label={open ? 'Recolher fluxogramas' : 'Explorar fluxogramas'} title="Explorar fluxogramas" onClick={() => toggle(project.id)}>{open ? <ChevronDown size={19} /> : <ChevronRight size={19} />}</button>
